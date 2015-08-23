@@ -1,0 +1,173 @@
+---
+title: "Practical Machine Learning - Course Project"
+output: html_document
+---
+
+These are the works produced for the Course Project of Coursera's Practical Machine Learning module under John Hopkins University. 
+
+Both Training and Test data are obtained from this source: http://groupware.les.inf.puc-rio.br/har.
+
+
+### Preparing and Reading Data 
+#### Reproducibility
+A random number was assigned to set seed at 1234 for all codes. Packages such as Caret, rpart and randomForest were installed to reproduce the analysis below. 
+
+We load the datasets and packages here, 
+
+```{r}
+library(caret)
+library(data.table)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+set.seed(1234)
+```
+
+followed by reading both Training and Test data.
+
+```{r}
+train_data <- read.csv("/Users/irvin/Desktop/machinelearning/pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+test_data <- read.csv("/Users/irvin/Desktop/machinelearning/pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+
+
+### Cleaning Data 
+#### Understanding how the data model was built
+The data shows an outcome variable with a factor variable of 5 levels where participants performed a single set of 10 repetitions of Unilateral Dumbbell Biceps Curl in 5 different styles.
+
+There are also variables in the dataset that has **NA** values which should be eliminated to get our **Predictor Candidates**. 
+
+To check the dimensions for the number of variables and observations, we do the following:
+```{r}
+dim(train_data)
+dim(test_data)
+```
+
+Next, remove the unnecessary missing values as well as irrelevant variables that will not be required from the dataset.
+
+The irrelevant variables to be removed are
+
++ "" (id)
++ "user_name"
++ "raw_timestamp_part_1"
++ "raw_timestamp_part_2"
++ "cvtd_timestamp"
+
+By assigning values to NA, the mean of column values will be assigned to NAs.
+
+
+```{r}
+# remove missing values
+train_data<-train_data[,colSums(is.na(train_data)) == 0]
+test_data <-test_data[,colSums(is.na(test_data)) == 0]
+
+# remove irrelevant variables
+train_data   <-train_data[,-c(1:7)]
+test_data <-test_data[,-c(1:7)]
+
+```
+
+
+Now we have our new datasets.
+```{r}
+dim(train_data)
+dim(test_data)
+head(train_data)
+head(test_data)
+```
+
+
+#### Section Training Dataset for Cross Validation 
+
+From the above, we can see that both the 'Train' and 'Test' datasets contain 53 variables each, with 19,622 and 20 obs respectively.
+
+To run the cross validation on the 'Train' data, it will be split into two sets, 'sub_train' and 'sub_test'.  
+```{r}
+sub_sample <- createDataPartition(y=train_data$classe, p=0.75, list=FALSE)
+
+# random sub_sampling with no substitutes
+sub_training <- train_data[sub_sample, ] 
+sub_testing <- train_data[-sub_sample, ]
+dim(sub_training)
+dim(sub_testing)
+head(sub_training)
+head(sub_testing)
+```
+
+
+### Analysing the Data 
+#### Overview of the data
+
+There are 5 levels of variables which are grouped as "Classe". Classe consists of bars A to E in the following chart. This will allow us to identify the frequency of the variables in each levels.
+
+```{r}
+plot(sub_training$classe, col="purple", main="Levels of the Variable Classe within the sub_training dataset", xlab="Classe Levels", ylab="Frequency")
+```
+
+From the above chart, we observe that bar A's frequency is the highest amongst the others with more than 4,000 occurences, whereas bar D is with the lowest frquency with just slightly over 2,000 occurences. 
+
+
+#### Prediction with Random Forest
+
+```{r}
+predict_rf <- randomForest(classe ~. , data=sub_training, method="class")
+
+# To predict:
+predicting_rf <- predict(predict_rf, sub_testing, type = "class")
+
+# Test results on sub_testing data set:
+confusionMatrix(predicting_rf, sub_testing$classe)
+```
+
+#### Prediction with the Decision Tree
+
+```{r}
+predict_dt <- rpart(classe ~ ., data=sub_training, method="class")
+
+# Predict:
+predicting_dt <- predict(predict_dt, sub_testing, type = "class")
+
+# Plot the Decision Tree
+rpart.plot(predict_dt, main="Classification Tree", extra=102, under=TRUE, faclen=0)
+```
+
+```{r}
+confusionMatrix(predicting_dt, sub_testing$classe)
+```
+
+
+### Conclusion 
+
+Using Random Forest has proved to be the better predictor compared to the analysis done with Decision Tree.
+
+Based on the above, the accuracy level for Random Forest was at 0.995, 0.256 higher than Decision Tree at 0.739. 
+
+Accordingly, the expected out-of-sample error done through cross validation is calculated to be of 1- accuracy. This is substantial in our case as the Test dataset had 20 cases, and with a 99% accuracy, we may not face misclassified samples again.
+
+
+### Submission 
+
+```{r}
+# predict outcome levels on the original Test dataset using Random Forest 
+predict_test_set <- predict(predict_rf, test_data, type="class")
+predict_test_set
+```
+
+#### Write files for submission
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predict_test_set)
+```
+
+
+
+
+
